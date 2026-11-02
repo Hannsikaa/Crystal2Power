@@ -44,3 +44,5 @@ Thumbs.db
 
 # Large dataset & trained models (keep git clean)
 *.parquet
+
+.vercel
