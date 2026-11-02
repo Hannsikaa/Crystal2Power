@@ -1174,19 +1174,55 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.end_headers()
 
-    def do_GET(self):
+    def _resolve_route(self) -> str:
+        """Resolves the true requested route from rewrite query params, Vercel headers, or path."""
         parsed = urlparse(self.path)
-        path = parsed.path
+        qs = parse_qs(parsed.query)
 
-        if path in ("/api/health", "/api/health/"):
+        # 1. Explicit query parameters injected by vercel.json rewrite
+        for q_key in ("__route", "route", "path"):
+            if q_key in qs and qs[q_key]:
+                raw = qs[q_key][0].split("?")[0].strip()
+                if raw:
+                    if not raw.startswith("/"):
+                        raw = "/" + raw
+                    clean = raw.rstrip("/")
+                    return clean if clean else "/"
+
+        # 2. Vercel infrastructure proxy headers
+        for h_key in ("x-matched-path", "x-real-path", "x-forwarded-uri", "x-original-uri"):
+            val = self.headers.get(h_key)
+            if val:
+                raw = val.split("?")[0].strip()
+                if raw and raw not in ("/api/index.py", "/api/index", "/app.py", "/app"):
+                    if not raw.startswith("/"):
+                        raw = "/" + raw
+                    clean = raw.rstrip("/")
+                    return clean if clean else "/"
+
+        # 3. Direct path (if not rewritten to the file entrypoint)
+        direct = parsed.path.strip()
+        if direct and direct not in ("/api/index.py", "/api/index", "/app.py", "/app"):
+            if not direct.startswith("/"):
+                direct = "/" + direct
+            clean = direct.rstrip("/")
+            return clean if clean else "/"
+
+        return "/"
+
+    def do_GET(self):
+        route = self._resolve_route()
+
+        if route == "/api/health":
             self._send_json({
                 "status": "healthy",
                 "model_loaded": pipeline is not None,
-                "dataset_rows": metadata.get("total_rows", 42443)
+                "dataset_rows": metadata.get("total_rows", 42443),
+                "features_count": len(FEATURE_COLUMNS)
             })
-        elif path in ("/api/presets", "/api/presets/"):
+        elif route == "/api/presets":
             self._send_json(PRESETS)
-        elif path in ("/api/metadata", "/api/metadata/"):
+        elif route == "/api/metadata":
             best_model_name = metadata.get("best_model", "HistGradientBoosting")
             metrics_dict = metadata.get("test_metrics", {})
             best_metrics = metrics_dict.get(best_model_name, {"r2": 0.515, "mae": 2.78, "rmse": 3.65})
@@ -1197,98 +1233,109 @@ class handler(BaseHTTPRequestHandler):
                 "all_models_metrics": metrics_dict,
                 "cv_scores_mae": metadata.get("cv_scores_mae", {})
             })
+        elif route.startswith("/api/"):
+            self._send_json({"error": f"API endpoint not found: {route}", "status": 404}, status=404)
         else:
             self._send_html(HTML_PAGE)
 
     def do_POST(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
+        route = self._resolve_route()
 
-        if path in ("/api/predict", "/api/predict/"):
-            content_length = int(self.headers.get("Content-Length", 0))
-            body_bytes = self.rfile.read(content_length) if content_length > 0 else b"{}"
+        if route != "/api/predict":
+            self._send_json({"error": f"API POST endpoint not found: {route}", "status": 404}, status=404)
+            return
 
-            try:
-                body_json = json.loads(body_bytes.decode("utf-8"))
-            except Exception:
-                self._send_json({"error": "Invalid JSON in request body"}, status=400)
-                return
-
-            inputs = body_json.get("params", {})
-            row_dict = {}
-            warnings = []
-
-            for col in FEATURE_COLUMNS:
-                val = inputs.get(col, None)
-                if val is None or val == "" or str(val).strip() == "":
-                    row_dict[col] = "Unknown"
-                else:
-                    row_dict[col] = val
-
-            df_input = pd.DataFrame([row_dict], columns=FEATURE_COLUMNS)
-
-            # Range check for extrapolation
-            ranges = metadata.get("numeric_ranges", {})
-            for col, stats in ranges.items():
-                if col in inputs and inputs[col] is not None:
-                    try:
-                        num_val = float(inputs[col])
-                        c_min = stats.get("min", -np.inf)
-                        c_max = stats.get("max", np.inf)
-                        if num_val < c_min or num_val > c_max:
-                            warnings.append(
-                                f"Input '{col}' ({num_val}) is outside the observed training domain [{c_min}, {c_max}]. Prediction is an extrapolation."
-                            )
-                    except (ValueError, TypeError):
-                        pass
-
-            try:
-                if pipeline is not None:
-                    raw_pred = pipeline.predict(df_input)
-                    pred_pce = float(np.clip(raw_pred[0], 0.0, 35.0))
-                else:
-                    pred_pce = 14.5
-            except Exception as e:
-                self._send_json({"error": f"Inference failed: {str(e)}"}, status=500)
-                return
-
-            tier_info = compute_efficiency_tier(pred_pce)
-            uncertainty = 1.45
-
-            recipe_snapshot = [
-                {"parameter": "Perovskite Composition", "value": str(inputs.get("Perovskite_composition_short_form", "N/A"))},
-                {"parameter": "Cell Architecture", "value": str(inputs.get("Cell_architecture", "N/A")).upper()},
-                {"parameter": "Perovskite Thickness", "value": f"{inputs.get('Perovskite_thickness', 'N/A')} nm"},
-                {"parameter": "Thermal Annealing Temp", "value": f"{inputs.get('Perovskite_deposition_thermal_annealing_temperature', 'N/A')} °C"},
-                {"parameter": "Thermal Annealing Time", "value": f"{inputs.get('Perovskite_deposition_thermal_annealing_time', 'N/A')} min"},
-                {"parameter": "Quenching Solvent", "value": str(inputs.get("Perovskite_deposition_quenching_induced_crystallisation", "None"))},
-                {"parameter": "Electron Transport Layer (ETL)", "value": str(inputs.get("ETL_stack_sequence", "N/A"))},
-                {"parameter": "Hole Transport Layer (HTL)", "value": str(inputs.get("HTL_stack_sequence", "N/A"))},
-                {"parameter": "Substrate Stack", "value": str(inputs.get("Substrate_stack_sequence", "N/A"))}
-            ]
-
-            scientific_notes = (
-                f"Device predicted at {pred_pce:.2f}% PCE falls into the '{tier_info['tier']}' regime. "
-                f"Carrier extraction is governed by band alignment at the {inputs.get('ETL_stack_sequence', 'ETL')} and "
-                f"{inputs.get('HTL_stack_sequence', 'HTL')} interfaces, with thermal annealing at "
-                f"{inputs.get('Perovskite_deposition_thermal_annealing_temperature', 100)}°C driving perovskite crystallization."
-            )
-
+        # Verification: ML model must be loaded (never fake prediction)
+        if pipeline is None:
             self._send_json({
-                "predicted_pce": round(pred_pce, 2),
-                "pce_lower": round(max(0.0, pred_pce - uncertainty), 2),
-                "pce_upper": round(min(35.0, pred_pce + uncertainty), 2),
-                "uncertainty": uncertainty,
-                "efficiency_tier": tier_info["tier"],
-                "tier_badge": tier_info["badge"],
-                "tier_color": tier_info["color"],
-                "tier_description": tier_info["desc"],
-                "recipe_snapshot": recipe_snapshot,
-                "warnings": warnings,
-                "scientific_notes": scientific_notes
-            })
-        else:
-            self.send_error(404, "Endpoint not found")
+                "error": "Machine learning pipeline is unavailable. crystal2power_best_model.joblib could not be loaded.",
+                "status": 503
+            }, status=503)
+            return
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        body_bytes = self.rfile.read(content_length) if content_length > 0 else b"{}"
+
+        try:
+            body_json = json.loads(body_bytes.decode("utf-8"))
+        except Exception as e:
+            self._send_json({"error": f"Invalid JSON payload: {str(e)}", "status": 400}, status=400)
+            return
+
+        inputs = body_json.get("params", {})
+        if not inputs or not isinstance(inputs, dict):
+            self._send_json({"error": "Request body must contain a 'params' dictionary.", "status": 400}, status=400)
+            return
+
+        row_dict = {}
+        warnings = []
+
+        for col in FEATURE_COLUMNS:
+            val = inputs.get(col, None)
+            if val is None or val == "" or str(val).strip() == "":
+                row_dict[col] = "Unknown"
+            else:
+                row_dict[col] = val
+
+        df_input = pd.DataFrame([row_dict], columns=FEATURE_COLUMNS)
+
+        # Range check for extrapolation
+        ranges = metadata.get("numeric_ranges", {})
+        for col, stats in ranges.items():
+            if col in inputs and inputs[col] is not None:
+                try:
+                    num_val = float(inputs[col])
+                    c_min = stats.get("min", -np.inf)
+                    c_max = stats.get("max", np.inf)
+                    if num_val < c_min or num_val > c_max:
+                        warnings.append(
+                            f"Input '{col}' ({num_val}) is outside the observed training domain [{c_min}, {c_max}]. Prediction is an extrapolation."
+                        )
+                except (ValueError, TypeError):
+                    pass
+
+        try:
+            raw_pred = pipeline.predict(df_input)
+            pred_pce = float(np.clip(raw_pred[0], 0.0, 35.0))
+        except Exception as e:
+            self._send_json({"error": f"Inference execution failed: {str(e)}", "status": 500}, status=500)
+            return
+
+        tier_info = compute_efficiency_tier(pred_pce)
+        uncertainty = 1.45
+
+        recipe_snapshot = [
+            {"parameter": "Perovskite Composition", "value": str(inputs.get("Perovskite_composition_short_form", "N/A"))},
+            {"parameter": "Cell Architecture", "value": str(inputs.get("Cell_architecture", "N/A")).upper()},
+            {"parameter": "Perovskite Thickness", "value": f"{inputs.get('Perovskite_thickness', 'N/A')} nm"},
+            {"parameter": "Thermal Annealing Temp", "value": f"{inputs.get('Perovskite_deposition_thermal_annealing_temperature', 'N/A')} °C"},
+            {"parameter": "Thermal Annealing Time", "value": f"{inputs.get('Perovskite_deposition_thermal_annealing_time', 'N/A')} min"},
+            {"parameter": "Quenching Solvent", "value": str(inputs.get("Perovskite_deposition_quenching_induced_crystallisation", "None"))},
+            {"parameter": "Electron Transport Layer (ETL)", "value": str(inputs.get("ETL_stack_sequence", "N/A"))},
+            {"parameter": "Hole Transport Layer (HTL)", "value": str(inputs.get("HTL_stack_sequence", "N/A"))},
+            {"parameter": "Substrate Stack", "value": str(inputs.get("Substrate_stack_sequence", "N/A"))}
+        ]
+
+        scientific_notes = (
+            f"Device predicted at {pred_pce:.2f}% PCE falls into the '{tier_info['tier']}' regime. "
+            f"Carrier extraction is governed by band alignment at the {inputs.get('ETL_stack_sequence', 'ETL')} and "
+            f"{inputs.get('HTL_stack_sequence', 'HTL')} interfaces, with thermal annealing at "
+            f"{inputs.get('Perovskite_deposition_thermal_annealing_temperature', 100)}°C driving perovskite crystallization."
+        )
+
+        self._send_json({
+            "predicted_pce": round(pred_pce, 2),
+            "pce_lower": round(max(0.0, pred_pce - uncertainty), 2),
+            "pce_upper": round(min(35.0, pred_pce + uncertainty), 2),
+            "uncertainty": uncertainty,
+            "efficiency_tier": tier_info["tier"],
+            "tier_badge": tier_info["badge"],
+            "tier_color": tier_info["color"],
+            "tier_description": tier_info["desc"],
+            "recipe_snapshot": recipe_snapshot,
+            "warnings": warnings,
+            "scientific_notes": scientific_notes
+        })
 
 # Expose app and handler for any runner
 app = handler
