@@ -7,3 +7,7 @@ joblib>=1.4.0
 openpyxl>=3.1.0
 pytest>=8.0.0
 python-pptx>=1.0.0
+fastapi>=0.110.0
+pydantic>=2.0.0
+uvicorn>=0.30.0
+

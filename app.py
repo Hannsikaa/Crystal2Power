@@ -18,6 +18,14 @@ import plotly.graph_objects as go
 # Ensure project root is in sys.path
 sys.path.append(os.path.abspath("."))
 
+# Vercel serverless entrypoint exports
+try:
+    from api.index import handler, app
+except Exception:
+    handler = None
+    app = None
+
+
 from src.data_loader import load_dataset, get_default_dataset_path
 from src.data_audit import generate_data_audit, save_audit_report
 from src.leakage import audit_target_leakage
