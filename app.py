@@ -10,11 +10,13 @@ import time
 from typing import Dict, Any, Optional, Tuple
 from http.server import BaseHTTPRequestHandler
 
-import streamlit as st
+try:
+    import streamlit as st
+except ImportError:
+    st = None
+
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
 
 # Ensure project root is in sys.path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -48,6 +50,10 @@ from src.explain import compute_permutation_importance, get_feature_explanation_
 from src.evaluate import format_metrics_table
 
 def run_streamlit():
+    import streamlit as st
+    import plotly.express as px
+    import plotly.graph_objects as go
+
     # -----------------------------------------------------------------------------
     # PAGE CONFIGURATION
     # -----------------------------------------------------------------------------
@@ -1231,5 +1237,12 @@ def run_streamlit():
                     </div>
                     """, unsafe_allow_html=True)
 
-if __name__ == '__main__' or st.runtime.exists():
+if __name__ == '__main__':
     run_streamlit()
+else:
+    try:
+        import streamlit as _st
+        if _st.runtime.exists():
+            run_streamlit()
+    except Exception:
+        pass

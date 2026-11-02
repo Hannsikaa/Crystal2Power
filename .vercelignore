@@ -1,0 +1,14 @@
+data/
+tests/
+reports/
+*.pptx
+*.docx
+*.csv
+.pytest_cache/
+__pycache__/
+generate_*.py
+inspect_*.py
+docx_helpers.py
+check_*.py
+train_real_model.py
+requirements-dev.txt

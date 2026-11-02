@@ -1,4 +1,12 @@
 {
+  "functions": {
+    "api/**/*.py": {
+      "excludeFiles": "{data/**,tests/**,reports/**,*.csv,*.pptx}"
+    },
+    "app.py": {
+      "excludeFiles": "{data/**,tests/**,reports/**,*.csv,*.pptx}"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
