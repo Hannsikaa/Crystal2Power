@@ -1,0 +1,150 @@
+{
+  "target_col": "JV_default_PCE",
+  "dataset_filename": "Solar Cell data set.csv",
+  "total_rows": 42443,
+  "train_rows": 33215,
+  "test_rows": 8304,
+  "best_model": "HistGradientBoosting",
+  "feature_columns": [
+    "Cell_stack_sequence",
+    "Cell_architecture",
+    "Substrate_stack_sequence",
+    "ETL_stack_sequence",
+    "ETL_deposition_procedure",
+    "Perovskite_composition_a_ions",
+    "Perovskite_composition_b_ions",
+    "Perovskite_composition_c_ions",
+    "Perovskite_composition_short_form",
+    "Perovskite_additives_compounds",
+    "Perovskite_additives_concentrations",
+    "Perovskite_thickness",
+    "Perovskite_deposition_number_of_deposition_steps",
+    "Perovskite_deposition_procedure",
+    "Perovskite_deposition_solvents",
+    "Perovskite_deposition_quenching_induced_crystallisation",
+    "Perovskite_deposition_thermal_annealing_temperature",
+    "Perovskite_deposition_thermal_annealing_time",
+    "HTL_stack_sequence",
+    "HTL_deposition_procedure",
+    "Backcontact_stack_sequence",
+    "Backcontact_thickness_list",
+    "Backcontact_deposition_procedure",
+    "Encapsulation",
+    "Encapsulation_stack_sequence"
+  ],
+  "excluded_columns": [
+    "JV_measured",
+    "JV_default_Voc",
+    "JV_default_Jsc",
+    "JV_default_FF",
+    "JV_default_PCE"
+  ],
+  "training_time_seconds": 664.49,
+  "training_timestamp": "2026-10-27 20:56:59",
+  "cv_scores_mae": {
+    "HistGradientBoosting": 2.825,
+    "RandomForest": 2.9608,
+    "ExtraTrees": 3.0467,
+    "DummyRegressor (Baseline)": 4.3057
+  },
+  "test_metrics": {
+    "HistGradientBoosting": {
+      "mae": 2.7762,
+      "rmse": 3.6472,
+      "r2": 0.515
+    },
+    "RandomForest": {
+      "mae": 2.9103,
+      "rmse": 3.8298,
+      "r2": 0.4652
+    },
+    "ExtraTrees": {
+      "mae": 3.022,
+      "rmse": 3.9758,
+      "r2": 0.4237
+    },
+    "DummyRegressor (Baseline)": {
+      "mae": 4.3101,
+      "rmse": 5.2375,
+      "r2": -0.0001
+    }
+  },
+  "top_features": [
+    {
+      "Feature": "HTL_stack_sequence",
+      "Importance_Mean": 0.3436,
+      "Importance_Std": 0.0175
+    },
+    {
+      "Feature": "Perovskite_deposition_quenching_induced_crystallisation",
+      "Importance_Mean": 0.3238,
+      "Importance_Std": 0.0244
+    },
+    {
+      "Feature": "Perovskite_deposition_solvents",
+      "Importance_Mean": 0.284,
+      "Importance_Std": 0.0217
+    },
+    {
+      "Feature": "Perovskite_composition_b_ions",
+      "Importance_Mean": 0.2058,
+      "Importance_Std": 0.0079
+    },
+    {
+      "Feature": "Perovskite_composition_a_ions",
+      "Importance_Mean": 0.186,
+      "Importance_Std": 0.0128
+    },
+    {
+      "Feature": "ETL_stack_sequence",
+      "Importance_Mean": 0.1521,
+      "Importance_Std": 0.0108
+    },
+    {
+      "Feature": "Perovskite_composition_c_ions",
+      "Importance_Mean": 0.1347,
+      "Importance_Std": 0.0105
+    },
+    {
+      "Feature": "Perovskite_composition_short_form",
+      "Importance_Mean": 0.1028,
+      "Importance_Std": 0.0113
+    },
+    {
+      "Feature": "Perovskite_deposition_thermal_annealing_time",
+      "Importance_Mean": 0.0826,
+      "Importance_Std": 0.0087
+    },
+    {
+      "Feature": "Perovskite_thickness",
+      "Importance_Mean": 0.0783,
+      "Importance_Std": 0.01
+    },
+    {
+      "Feature": "ETL_deposition_procedure",
+      "Importance_Mean": 0.0749,
+      "Importance_Std": 0.003
+    },
+    {
+      "Feature": "Perovskite_additives_compounds",
+      "Importance_Mean": 0.0692,
+      "Importance_Std": 0.0078
+    },
+    {
+      "Feature": "Backcontact_thickness_list",
+      "Importance_Mean": 0.0655,
+      "Importance_Std": 0.0079
+    },
+    {
+      "Feature": "Cell_stack_sequence",
+      "Importance_Mean": 0.0623,
+      "Importance_Std": 0.0089
+    },
+    {
+      "Feature": "Perovskite_deposition_thermal_annealing_temperature",
+      "Importance_Mean": 0.0609,
+      "Importance_Std": 0.0054
+    }
+  ],
+  "random_seed": 42
+}
