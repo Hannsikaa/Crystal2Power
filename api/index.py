@@ -1187,10 +1187,15 @@ class handler(BaseHTTPRequestHandler):
         elif path in ("/api/presets", "/api/presets/"):
             self._send_json(PRESETS)
         elif path in ("/api/metadata", "/api/metadata/"):
+            best_model_name = metadata.get("best_model", "HistGradientBoosting")
+            metrics_dict = metadata.get("test_metrics", {})
+            best_metrics = metrics_dict.get(best_model_name, {"r2": 0.515, "mae": 2.78, "rmse": 3.65})
             self._send_json({
-                "best_model": metadata.get("best_model", "HistGradientBoosting"),
+                "best_model": best_model_name,
                 "total_rows": metadata.get("total_rows", 42443),
-                "test_metrics": metadata.get("test_metrics", {"r2": 0.720, "mae": 2.05, "rmse": 2.77})
+                "test_metrics": best_metrics,
+                "all_models_metrics": metrics_dict,
+                "cv_scores_mae": metadata.get("cv_scores_mae", {})
             })
         else:
             self._send_html(HTML_PAGE)
